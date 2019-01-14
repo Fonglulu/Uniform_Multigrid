@@ -17,7 +17,17 @@ from numpy import linalg as LA
 
 
 
-from functions import Linear, Xlinear, Ylinear, Zero
+from grid.Grid import Grid
+from BuildSquare import build_square_grid
+from BuildEquation import build_equation_linear_2D, set_polynomial_linear_2D,\
+Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY, NIn_triangle, build_matrix_fem_2D
+from grid.function.FunctionStore import zero
+
+
+
+
+
+from functions import Linear, Xlinear, Ylinear, Zero, Exy, Xexy, Yexy, XYexy
 
 from operator import itemgetter
 #np.set_printoptions(precision=4)
@@ -42,12 +52,35 @@ def Injection(uf):
     Output: Restricted approximation on coarse grid 
     
     """
-#    #print uf[1], 'injectbefore'
-#    # Get the current size of approximation
-    [depth, xdim, ydim] = uf.shape
 
+#    # Get the current fine grid
+    [depth, xdim, ydim] = uf.shape
+    #print xdim
     
-    return uf[:, 0:xdim:2, 0:ydim:2]
+    #return uf[:, 0:xdim:2, 0:ydim:2]
+    
+#    # Coarse grid size
+    xnodes = int((xdim+1)/2)
+    #print xnodes
+    ynodes = int((ydim+1)/2)
+    
+    # Set coarse grid
+    grid = np.zeros((depth, xnodes,ynodes))
+    
+    
+    # Find the values from the original positions
+    for k in range(depth):
+        for i in range(1, xnodes-1):
+            for j in range(1, ynodes-1):
+                
+                grid[k,i,j] = uf[k,2*i,2*j] + 0.5*(uf[k, 2*i-1, 2*j]+uf[k, 2*i+1, 2*j] + uf[k,2*i, 2*j-1]+\
+                    uf[k,2*i,2*j+1]) + 0.25* (uf[k,2*i-1,2*j-1] + uf[k,2*i-1, 2*j+1] + uf[k,2*i+1, 2*j-1] + uf[k,2*i+1, 2*j+1])
+                
+    return grid
+                
+#                
+                
+
 
 
 
@@ -69,27 +102,27 @@ def Interpolation(uc):
     grid = np.zeros((depth, xnodes,ynodes))
     
     
-    # For even ordered i and j
+    # For even ordered i and j on fine grid
     for k in range(depth):
         for i in range(xdim):
             for j in range (ydim):
                 grid[k, 2*i, 2*j]=uc[k, i,j]
     
 
-    # For even ordered j  
+    # For even ordered j on fine grid on fine grid
     for k in range(depth):
         for i in range(0, ynodes, 2):
             for j in range(1, xnodes-1, 2):
                 grid[k,i,j]=0.5*(grid[k,i,j-1]+grid[k,i,j+1])
 
         
-    # For even ordered i   
+    # For even ordered i on fine grid on fine grid
     for k in range(depth):
         for i in range(1, xnodes-1, 2):
             for j in range (0, ynodes, 2):
                 grid[k,i,j]=0.5*(grid[k,i-1,j]+grid[k,i+1,j])
     
-    # For odd ordered i and j
+    # For odd ordered i and j on fine grid on fine grid
     for k in range(depth):
         for i in range (1, xnodes-1, 2):
             for j in range (1, ynodes-1, 2):
@@ -120,17 +153,30 @@ def residue(rhs, u, alpha):
     
     # Initialise the residual
     #print rhs[0].shape[0], 'RHSDIM'
-    r=np.zeros((4, rhs[0].shape[0],rhs[0].shape[1]))
+#    r=np.zeros((4, rhs.shape[1],rhs.shape[2]))
+#    
+#    r[0] = rhs[0] - np.sqrt(alpha)*Lstencil(u[0])+ G1stencil(u[1], h) + G2stencil(u[2] ,h)
+#    
+#    r[1] = rhs[1] - Lstencil(u[1]) - G1stencil(u[3],h)
+#    
+#    r[2] = rhs[2] - Lstencil(u[2]) - G2stencil(u[3], h)
+#    
+#    r[3] = rhs[3] - Astencil(u[0], h) - np.sqrt(alpha)* Lstencil(u[3])
+    
+    r=np.zeros((4, rhs.shape[1],rhs.shape[2]))
     
     r[0] = rhs[0] - Lstencil(u[0])+ G1stencil(u[1], h) + G2stencil(u[2] ,h)
     
-    r[1] = rhs[1] - alpha*Lstencil(u[1]) + G1stencil(u[3],h)
+    r[1] = rhs[1] - alpha *  Lstencil(u[1]) - G1stencil(u[3],h)
     
-    r[2] = rhs[2] - alpha*Lstencil(u[2]) + G2stencil(u[3], h)
+    r[2] = rhs[2] - alpha * Lstencil(u[2]) - G2stencil(u[3], h)
     
-    r[3] = rhs[3] - Astencil(u[0], h) - Lstencil(u[3])
+    r[3] = rhs[3] - Astencil(u[0], h) -  Lstencil(u[3])
     
     
+
+#
+#    
 
                                     
                                   
@@ -148,9 +194,12 @@ def residue(rhs, u, alpha):
 
 def VCycle(u,rhs,  s1, s2, alpha, count = 0):
     
+    #from Jacobi_unifrom import Jacobi
     from matplotlib.ticker import LinearLocator, FormatStrFormatter
     from matplotlib import cm
     from Rich_uniform import Rich
+    
+    
     
     # Perfore iterations of smoother to improve the estimate of u.h
     
@@ -160,8 +209,9 @@ def VCycle(u,rhs,  s1, s2, alpha, count = 0):
         
         for sweeps in range(s2):
         
-             u = Rich(u, rhs,alpha)
-             #u =Jacobi(u, rhs, alpha,) 
+             u = Rich(u, rhs, alpha)
+             
+            # u =Jacobi(u, rhs, alpha, L_list[count]) 
             
     else:
         
@@ -192,15 +242,16 @@ def VCycle(u,rhs,  s1, s2, alpha, count = 0):
             
             #print count, 'count'
              u = Rich(u, rhs, alpha)
-             #u = Jacobi(u, rhs, alpha,)
-            
+             
+             #u = Jacobi(u, rhs, alpha, L_list[count])
+             
 
 #        
             
     if u[0].shape[0] != 3:
 
         
-        rhs = residue(rhs, u, alpha, )
+        rhs = residue(rhs, u, alpha)
         
         rhs = Injection(rhs)
         
@@ -209,7 +260,7 @@ def VCycle(u,rhs,  s1, s2, alpha, count = 0):
         
 
         
-        uc = VCycle(uc, rhs, s1, s2, alpha, count + 1)
+        uc = VCycle(uc, rhs, s1, s2, alpha,  count + 1)
         
         u = u + Interpolation(uc)
             
@@ -227,12 +278,16 @@ def Ultimate_MG(cyclenumber):
     from dvector import dvector
     
     from h_boundaries import hboundaries
+    
+    from TPSFEM import Lmatrix
 
+
+    #grid = Grid()
     
 
 
     
-    i = 3
+    i = 4
 
     n= 2**i+1
     
@@ -248,8 +303,8 @@ def Ultimate_MG(cyclenumber):
     intnodes = np.vstack([intx.ravel(), inty.ravel()]).T
     
     # Set the uniformly distributed data 
-    datax = np.linspace(0, 1.0,20)
-    datay = np.linspace(0, 1.0,20)
+    datax = np.linspace(0, 1.0,30)
+    datay = np.linspace(0, 1.0,30)
   
     dataX, dataY = np.meshgrid(datax,datay)
     
@@ -262,13 +317,13 @@ def Ultimate_MG(cyclenumber):
     Coord = zip(coordx, coordy)
 
     # Set the exact solution of c, g1, g2, w on every node
-    cexact = Linear
+    cexact = Exy
     c = cexact(x1,y1).flatten()
-    g1exact =  Xlinear
+    g1exact =  Xexy
     g1 = g1exact(x1,y1).flatten()
-    g2exact = Ylinear
+    g2exact = Yexy
     g2 = g2exact(x1,y1).flatten()
-    wexact = Zero
+    wexact = XYexy
     w = wexact(x1,y1).flatten()
 
     
@@ -277,7 +332,7 @@ def Ultimate_MG(cyclenumber):
     
 
     # Set penalty term
-    alpha = 1
+    alpha = 0.1
 
 
     dvector = dvector(Coord, data, nodes, n)/float(len(Coord))
@@ -286,13 +341,13 @@ def Ultimate_MG(cyclenumber):
     
     
     
-    h1 = hboundaries(h, n, nodes, intnodes, c, g1, g2, w)[0]
+    h1 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[0]
     
-    h2 = hboundaries(h, n, nodes, intnodes, c, g1, g2, w)[1]
+    h2 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[1]
     
-    h3 = hboundaries(h, n, nodes, intnodes, c, g1, g2, w)[2]
+    h3 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[2]
     
-    h4 = hboundaries(h, n, nodes, intnodes, c, g1, g2, w)[3]
+    h4 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[3]
     
     h1 = np.reshape(h1, (n-2,n-2))
     
@@ -305,71 +360,104 @@ def Ultimate_MG(cyclenumber):
     
 
 
-            
-
-    
+#
+#    L_list = []
+#    
+#    xdim = []
+#    
+#    xdim.append(n)
+#    
+#    levelnumber  = 0
+#    
+#    
+#    
+#    
+#    while ( (xdim[levelnumber]-1) % 2 == 0 and xdim[levelnumber]-1 >2) :
+#    
+#    
+#            levelnumber = levelnumber+1
+#            
+#            xdim.append((xdim[levelnumber - 1] -1) //2 +1)
+#    
+#  
+#      
+#    for i in xdim :
+#        
+#        if i == n:
+#        
+#            # Initialise grid for calculating matrices and boundaries
+#            grid = Grid()
+#            
+#            # Build square 
+#            build_square_grid(i, grid, zero)
+#            
+#            
+#            
+#            # Store matrices on grid
+#            build_matrix_fem_2D(grid, Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY,  dataX, dataY)
+#            
+#
+#            
+#           
+#            
+#            L_list.append(Lmatrix(grid))
+#            
+#
+#        
+#        else :
+#            
+#            # Initialise grid for calculating matrices and boundaries
+#            grid = Grid()
+#            
+#            # Build square 
+#            build_square_grid(i, grid, zero)
+#            
+#            # Store matrices on grid
+#            build_matrix_fem_2D(grid, Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY,  dataX, dataY)
+#            
+#
+#            
+#            L_list.append(Lmatrix(grid))
+###            
+#
+#    
+#    
+#
+#
+#            
+#
+#    
 
     
     # Set the initial guess for interior nodes values
     u=np.zeros((4,n,n))
-
-    
-    
-    
-    # Set RHS at intilisation
-    #rhs = np.zeros((4, n-2, n-2))
+#    
     rhs = np.zeros((4,n,n))
     rhs[0][1:-1,1:-1] = -h4
     rhs[1][1:-1,1:-1] = -h2
     rhs[2][1:-1,1:-1] = -h3
     rhs[3][1:-1,1:-1]= dvector-h1
-    #print rhs[3][1:-1,1:-1]
 
     
-    # Set the boundary (also the exact solution in this case)
-#    
-    u[0,0,:] = cexact(x1, y1)[0]
     
-    u[0, -1,:] = cexact(x1, y1)[-1]
     
-    u[0, :, 0] = cexact(x1, y1)[:, 0]
-    
-    u[0,:,-1] = cexact(x1, y1)[:,-1]
-    
-    u[1,0,:] = g1exact(x1, y1)[0]
-    
-    u[1, -1,:] = g1exact(x1, y1)[-1]
-    
-    u[1, :, 0] = g1exact(x1, y1)[:,0]
-    
-    u[1,:,-1] = g1exact(x1, y1)[:,-1]
-    
-    u[2,0,:] = g2exact(x1, y1)[0]
-    
-    u[2, -1,:] = g2exact(x1, y1)[-1]
-    
-    u[2, :, 0] = g2exact(x1, y1)[:,0]
-    
-    u[2,:,-1] = g2exact(x1, y1)[:,-1]
-    
-    u[3,0,:] = wexact(x1, y1)[0]
-    
-    u[3, -1,:] = wexact(x1, y1)[-1]
-    
-    u[3, :, 0] = wexact(x1, y1)[:,0]
-    
-    u[3,:,-1] = wexact(x1, y1)[:,-1]
-    
-#    u2 =copy(u)
+    # Set RHS at intilisation
+
+#    rhs = np.zeros((4,n,n))
+#    rhs[0][1:-1,1:-1] = -np.sqrt(alpha)*h4
+#    rhs[1][1:-1,1:-1] = -h2/float(np.sqrt(alpha))
+#    rhs[2][1:-1,1:-1] = -h3/float(np.sqrt(alpha))
+#    rhs[3][1:-1,1:-1]= dvector-h1
+
     # Set the number of relax
-    s1=2
-    s2=2
+    s1=10
+    s2=10
 #    s3=6
 #    s4=6
     
     
 #    #Initialise a list to record l2 norm of resudual 
-    rnorm=[np.linalg.norm(residue(rhs, u, alpha)[0, 1:-1,1:-1])*h] #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2]) * h]
+    rnorm=[np.linalg.norm(residue(rhs, u, alpha)[0])*h] #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2]) * h]
 ##    
 ##    # Initialise a list to record l2 norm of error
 #    ecnorm = [np.linalg.norm(u[0]-cexact(x1, y1))*h]
@@ -390,7 +478,7 @@ def Ultimate_MG(cyclenumber):
     
         
         #print rhs[0], 'RHS'
-        rnorm.append(np.linalg.norm(residue(rhs, u, alpha)[0,2:-2,2:-2])*h) #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2])*h)
+        rnorm.append(np.linalg.norm(residue(rhs, u, alpha)[0])*h) #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2])*h)
 #    
 #        ecnorm.append(np.linalg.norm((u[0]-cexact(x1,y1))[2:-2,2:-2])*h) 
 #         eg1norm.append(np.linalg.norm((u[1]-g1exact(x1,y1))[2:-2,2:-2])*h)
@@ -408,11 +496,11 @@ def Ultimate_MG(cyclenumber):
     plt.figure(figsize=(4,5))
     plt.semilogy(xline, rnorm, 'bo-', xline, rnorm, 'k',label='sdad')
     #plt.semilogy(xline, egg1norm, 'bo', xline, egg1norm, 'k',label='sdad')
-    title('Convergence with Error(Jacobi)')
+    title('Convergence with Residual(Richardson)')
     xlabel('Number of cycles')
     ylabel('Error under l2 norm')
     plt.show()
-    print u, rnorm
+    #print u, rnorm
 
     return u
     
@@ -436,7 +524,7 @@ def Plot_approximation(cyclenumber):
     ax = fig.gca(projection='3d')
     
     # Make data.
-    i = 5
+    i = 2
     
     n= 2**i+1
     

@@ -1,22 +1,16 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Created on Sun Nov 18 13:18:14 2018
+Created on Wed Dec 19 15:17:25 2018
 
 @author: shilu
 """
 
-
-
 import numpy as np
-from numpy import  pi, sin, cos, exp, inf
+
+from scipy import zeros
+
 from scipy.sparse.linalg import spsolve
-from scipy import eye, zeros, linalg
-from numpy import linalg as LA
-from copy import copy
-
-
-
 
 
 def Lstencil(u):
@@ -85,69 +79,54 @@ def G2stencil(u,h):
             
     return newu
             
-    
-    
-    
-    
-    
-    
-    
+            
 
 
-
-def Rich(u, rhs,alpha):
+def Jacobi(u, rhs,alpha, L):
     
-    """ Block Jacobi Method. On each level of grid (same size as initial grid), invoke corresponding matrices
+    from copy import copy
+    #print u[3], 'pre'
     
-    A, L, G1, G2, d and boundaries h1, h2, h3, h4 
-    
-    """
-    
-    #print u[0], 'pre'
-    
-    #print alpha, 'alpha'
-    
-    #np.set_printoptions(precision=2)
-    
-    # Get the current size of RHS function 
     [xdim,ydim] = rhs[0][1:-1, 1:-1].shape
     
     h = 1/ float(xdim+2-1)
     
-   
-    #newu  = np.zeros((4, u.shape[1], u.shape[2]))  
+    crhs = zeros([xdim+2, ydim+2])
+    
+    g1rhs = zeros([xdim+2, ydim+2])
+    
+    g2rhs = zeros([xdim+2, ydim+2])
+    
+    wrhs = zeros([xdim+2, ydim+2])
+    
+    newu = copy(u)
     
 
-
+     
+    crhs = rhs[0]  + G1stencil(newu[1],h) + G2stencil(newu[2],h)
     
-    w = 0.2
+    u[0][1:-1, 1:-1] = np.reshape(spsolve(np.sqrt(alpha)*L, np.reshape(crhs[1:-1,1:-1],(xdim**2, 1))), (xdim, ydim))
     
-#    u[0] = u[0] + w*(rhs[0] - np.sqrt(alpha)*Lstencil(u[0]) + G1stencil(u[1], h) + G2stencil(u[2],h))
-#    
-#    u[1] = u[1] + w*(rhs[1] - Lstencil(u[1]) - G1stencil(u[3],h))
-#    
-#    u[2] = u[2] + w*(rhs[2] - Lstencil(u[2]) - G2stencil(u[3],h))
-#    
-#    u[3] = u[3] + w*(rhs[3] - np.sqrt(alpha)*Lstencil(u[3]) - Astencil(u[0],h))
-#    
-    u[0] = u[0] + w*(rhs[0] - Lstencil(u[0]) + G1stencil(u[1], h) + G2stencil(u[2],h))
+    g1rhs = rhs[1] - G1stencil(newu[3],h)
     
-    u[1] = u[1] + w*(rhs[1] - alpha* Lstencil(u[1]) - G1stencil(u[3],h))
+    u[1][1:-1, 1:-1] = np.reshape(spsolve(L, np.reshape(g1rhs[1:-1,1:-1],(xdim**2, 1))), (xdim, ydim))
     
-    u[2] = u[2] + w*(rhs[2] - alpha* Lstencil(u[2]) - G2stencil(u[3],h))
+    g2rhs = rhs[2] - G2stencil(newu[3],h)
     
-    u[3] = u[3] + w*(rhs[3] - Lstencil(u[3]) - Astencil(u[0],h))
+    u[2][1:-1, 1:-1] = np.reshape(spsolve(L, np.reshape(g2rhs[1:-1,1:-1],(xdim**2, 1))), (xdim, ydim))  
     
-    #print u[0], 'post'
+    wrhs = rhs[3] - Astencil(newu[0],h)
     
-
+    u[3][1:-1, 1:-1] = np.reshape(spsolve(np.sqrt(alpha)*L, np.reshape(wrhs[1:-1,1:-1],(xdim**2, 1))), (xdim, ydim))  
     
     
+    #print u[3], 'post'
     return u
-
-
     
-
+    
+    
+    
+            
     
     
     
