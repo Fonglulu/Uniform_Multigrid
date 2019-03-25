@@ -6,9 +6,12 @@ Created on Sat Nov 10 12:09:26 2018
 @author: shilu
 """
 
+# Import appropriate information from other classes
+import time 
 
-
-
+from Transfer import Interpolation, Res_Injection, FW_Restriction
+from Residue import residue_sqrt_alpha
+from PlotRountines import smoother_plot, convergence_plot
 import numpy as np
 from numpy import  pi, sin, cos, exp, inf
 from scipy.sparse.linalg import spsolve
@@ -16,279 +19,76 @@ from scipy import eye, zeros, linalg
 from numpy import linalg as LA
 
 
-
-from grid.Grid import Grid
-from BuildSquare import build_square_grid
-from BuildEquation import build_equation_linear_2D, set_polynomial_linear_2D,\
-Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY, NIn_triangle, build_matrix_fem_2D
-from grid.function.FunctionStore import zero
-
-
-
-
-
 from functions import Linear, Xlinear, Ylinear, Zero, Exy, Xexy, Yexy, XYexy
 
 from operator import itemgetter
-#np.set_printoptions(precision=4)
+
 
 from copy import copy
 
-
-
-import matplotlib.pyplot as plt
-from pylab import title, xlabel, ylabel, clf, plot,show, legend
 #np.set_printoptions(precision=2)
 
 
 
-def Injection(uf):
-    
-    """ 
-    Restrict find grid to coarse grid by injection
-    
-    Input: current approximation on fine grid uf
-    
-    Output: Restricted approximation on coarse grid 
-    
+def VCycle(u,rhs,  s1, s2, alpha):
+    """ This routine implements the recurssion version of V-cycle
+        input: current approximation of u
+               rhs 
+               s1: number of iterations for relaxtions applied downwards
+               s2: number of iterations for relaxtions applied upwards
+               alpha
+        outpu: new approximation of u
     """
-
-#    # Get the current fine grid
-    [depth, xdim, ydim] = uf.shape
-    #print xdim
     
-    #return uf[:, 0:xdim:2, 0:ydim:2]
-    
-#    # Coarse grid size
-    xnodes = int((xdim+1)/2)
-    #print xnodes
-    ynodes = int((ydim+1)/2)
-    
-    # Set coarse grid
-    grid = np.zeros((depth, xnodes,ynodes))
-    
-    
-    # Find the values from the original positions
-    for k in range(depth):
-        for i in range(1, xnodes-1):
-            for j in range(1, ynodes-1):
-                
-                grid[k,i,j] = uf[k,2*i,2*j] + 0.5*(uf[k, 2*i-1, 2*j]+uf[k, 2*i+1, 2*j] + uf[k,2*i, 2*j-1]+\
-                    uf[k,2*i,2*j+1]) + 0.25* (uf[k,2*i-1,2*j-1] + uf[k,2*i-1, 2*j+1] + uf[k,2*i+1, 2*j-1] + uf[k,2*i+1, 2*j+1])
-                
-    return grid
-                
-#                
-                
-
-
-
-
-def Interpolation(uc):
-    
-    """ 
-    Interpolate coarse grid to fine grid
-    
-    Input: current approximation on coarse grid uc
-
-    Output: Interpolated approximation on find grid    
-    """
-    [depth, xdim, ydim] = uc.shape
-    #print depth, xdim, ydim
-    
-    # Initialise a next fine grid
-    xnodes = 2*xdim-1
-    ynodes = 2*ydim-1
-    grid = np.zeros((depth, xnodes,ynodes))
-    
-    
-    # For even ordered i and j on fine grid
-    for k in range(depth):
-        for i in range(xdim):
-            for j in range (ydim):
-                grid[k, 2*i, 2*j]=uc[k, i,j]
-    
-
-    # For even ordered j on fine grid on fine grid
-    for k in range(depth):
-        for i in range(0, ynodes, 2):
-            for j in range(1, xnodes-1, 2):
-                grid[k,i,j]=0.5*(grid[k,i,j-1]+grid[k,i,j+1])
-
-        
-    # For even ordered i on fine grid on fine grid
-    for k in range(depth):
-        for i in range(1, xnodes-1, 2):
-            for j in range (0, ynodes, 2):
-                grid[k,i,j]=0.5*(grid[k,i-1,j]+grid[k,i+1,j])
-    
-    # For odd ordered i and j on fine grid on fine grid
-    for k in range(depth):
-        for i in range (1, xnodes-1, 2):
-            for j in range (1, ynodes-1, 2):
-                grid[k,i,j]=0.25*(grid[k,i-1,j]+grid[k,i+1,j]+grid[k,i,j-1]+grid[k,i,j+1])#    
-
-            
-            
-    return grid
-
-
-
-
-
-
-
-def residue(rhs, u, alpha):
-    
-    
-    from Rich_uniform import Astencil, G1stencil, G2stencil, Lstencil
-
-    # Get the current size of RHS function
-    [xdim,ydim] = rhs[0][1:-1,1:-1].shape
-    
-    h = 1/ float(xdim+2-1)
-
-    
-
-    
-    # Initialise the residual
-    #print rhs[0].shape[0], 'RHSDIM'
-#    r=np.zeros((4, rhs.shape[1],rhs.shape[2]))
-#    
-#    r[0] = rhs[0] - np.sqrt(alpha)*Lstencil(u[0])+ G1stencil(u[1], h) + G2stencil(u[2] ,h)
-#    
-#    r[1] = rhs[1] - Lstencil(u[1]) - G1stencil(u[3],h)
-#    
-#    r[2] = rhs[2] - Lstencil(u[2]) - G2stencil(u[3], h)
-#    
-#    r[3] = rhs[3] - Astencil(u[0], h) - np.sqrt(alpha)* Lstencil(u[3])
-    
-    r=np.zeros((4, rhs.shape[1],rhs.shape[2]))
-    
-    r[0] = rhs[0] - Lstencil(u[0])+ G1stencil(u[1], h) + G2stencil(u[2] ,h)
-    
-    r[1] = rhs[1] - alpha *  Lstencil(u[1]) - G1stencil(u[3],h)
-    
-    r[2] = rhs[2] - alpha * Lstencil(u[2]) - G2stencil(u[3], h)
-    
-    r[3] = rhs[3] - Astencil(u[0], h) -  Lstencil(u[3])
-    
-    
-
-#
-#    
-
-                                    
-                                  
-
-
-    return r
-
-
-
-
-
-
-
-
-
-def VCycle(u,rhs,  s1, s2, alpha, count = 0):
-    
-    #from Jacobi_unifrom import Jacobi
-    from matplotlib.ticker import LinearLocator, FormatStrFormatter
-    from matplotlib import cm
     from Rich_uniform import Rich
     
     
-    
-    # Perfore iterations of smoother to improve the estimate of u.h
-    
-    #print count
-    
-    if u[0].shape[0] == 3:
-        
-        for sweeps in range(s2):
-        
-             u = Rich(u, rhs, alpha)
-             
-            # u =Jacobi(u, rhs, alpha, L_list[count]) 
-            
-    else:
+    if u[0].shape[0] != 3:
         
         for sweeps in range(s1):
-#            
-#            fig = plt.figure(figsize=(8,5))
-#            ax = fig.gca(projection='3d')
-#            
-#            h = 1/float(u[0].shape[0]-1)
-#            
-#            x1, y1 = np.meshgrid(np.arange(0, 1+h, h), np.arange(0, 1+h, h))
-#        
-#            
-#        #uexact = sin_soln(x1, y1)
-#        # Plot the surface.
-#            surf = ax.plot_surface(x1, y1, u[0], cmap=cm.coolwarm,
-#                               linewidth=0)
-#        
-#        # Customize the z axis.
-#        #ax.set_zlim(-1.01, 1.01)
-#            ax.zaxis.set_major_locator(LinearLocator(10))
-#            ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-#    
-#            fig.colorbar(surf, shrink=0.5, aspect=5)
-#            print 'here comes plot'
-#            plt.show() 
+            #print 'downwards'
+            u = Rich(u, rhs, alpha)
         
-            
-            #print count, 'count'
-             u = Rich(u, rhs, alpha)
-             
-             #u = Jacobi(u, rhs, alpha, L_list[count])
-             
-
-#        
-            
-    if u[0].shape[0] != 3:
+        rhs1 = residue_sqrt_alpha(rhs, u, alpha)
 
         
-        rhs = residue(rhs, u, alpha)
+        rhs1 = Res_Injection(rhs1)
         
-        rhs = Injection(rhs)
+        uc = np.zeros((4, rhs1[0].shape[0], rhs1[0].shape[0]))
         
-
-        uc = np.zeros((4, rhs[0].shape[0], rhs[0].shape[0]))
-        
-
-        
-        uc = VCycle(uc, rhs, s1, s2, alpha,  count + 1)
+        uc = VCycle(uc, rhs1, s1, s2, alpha, )
         
         u = u + Interpolation(uc)
-            
-            
-    #print rhs, 'RHS'
+        
+        
+    
+    for sweeps in range(s2):
+        
+             u = Rich(u, rhs, alpha)
+        
     return u
     
 
     
+def Setup_Grid(i, alpha, matrix_type):
     
-    
-
-def Ultimate_MG(cyclenumber):
+    """ This routine sets up the grid(mesh). The grid is the uniform mesh with 
+        uniformly distributed data. Be aware that the number of data need to be 
+        entered manually
+        
+        input: i the index of grid size
+               alpha
+               matrix_type, if is the original version, enter 'Original'.
+               
+        There is no return of this routine
+    """
     
     from dvector import dvector
     
     from h_boundaries import hboundaries
     
-    from TPSFEM import Lmatrix
-
-
-    #grid = Grid()
+    global h, u, rhs, cexact, x1, y1
     
-
-
-    
-    i = 4
-
     n= 2**i+1
     
     # Find the spacing
@@ -304,43 +104,47 @@ def Ultimate_MG(cyclenumber):
     
     # Set the uniformly distributed data 
     datax = np.linspace(0, 1.0,30)
+    
     datay = np.linspace(0, 1.0,30)
-  
+    
     dataX, dataY = np.meshgrid(datax,datay)
-    
-    
+
     data = Linear(dataX,dataY)
+    
     data = data.flatten()
     
     coordx = dataX.flatten()
+    
     coordy = dataY.flatten()
+    
     Coord = zip(coordx, coordy)
 
     # Set the exact solution of c, g1, g2, w on every node
-    cexact = Exy
+    cexact = Linear
     c = cexact(x1,y1).flatten()
-    g1exact =  Xexy
+    g1exact =  Xlinear
     g1 = g1exact(x1,y1).flatten()
-    g2exact = Yexy
+    g2exact = Ylinear
     g2 = g2exact(x1,y1).flatten()
-    wexact = XYexy
+    wexact = Zero
     w = wexact(x1,y1).flatten()
-
     
-    # Set the shape of objective function
-
+    print 'START'
+    start = time.time()
     
-
-    # Set penalty term
-    alpha = 0.1
-
-
+    # Import the dvector
     dvector = dvector(Coord, data, nodes, n)/float(len(Coord))
     
     dvector = np.reshape(dvector, (n-2,n-2))
     
+    done = time.time()
+    
+    elapsed = done - start
+    print(elapsed)
+    print 'FINISH'
     
     
+    # import the boundary condition to form rhs vector
     h1 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[0]
     
     h2 = hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w)[1]
@@ -357,264 +161,65 @@ def Ultimate_MG(cyclenumber):
     
     h4 = np.reshape(h4, (n-2,n-2))
     
-    
-
-
-#
-#    L_list = []
-#    
-#    xdim = []
-#    
-#    xdim.append(n)
-#    
-#    levelnumber  = 0
-#    
-#    
-#    
-#    
-#    while ( (xdim[levelnumber]-1) % 2 == 0 and xdim[levelnumber]-1 >2) :
-#    
-#    
-#            levelnumber = levelnumber+1
-#            
-#            xdim.append((xdim[levelnumber - 1] -1) //2 +1)
-#    
-#  
-#      
-#    for i in xdim :
-#        
-#        if i == n:
-#        
-#            # Initialise grid for calculating matrices and boundaries
-#            grid = Grid()
-#            
-#            # Build square 
-#            build_square_grid(i, grid, zero)
-#            
-#            
-#            
-#            # Store matrices on grid
-#            build_matrix_fem_2D(grid, Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY,  dataX, dataY)
-#            
-#
-#            
-#           
-#            
-#            L_list.append(Lmatrix(grid))
-#            
-#
-#        
-#        else :
-#            
-#            # Initialise grid for calculating matrices and boundaries
-#            grid = Grid()
-#            
-#            # Build square 
-#            build_square_grid(i, grid, zero)
-#            
-#            # Store matrices on grid
-#            build_matrix_fem_2D(grid, Poisson_tri_integrate, TPS_tri_intergrateX, TPS_tri_intergrateY,  dataX, dataY)
-#            
-#
-#            
-#            L_list.append(Lmatrix(grid))
-###            
-#
-#    
-#    
-#
-#
-#            
-#
-#    
-
-    
-    # Set the initial guess for interior nodes values
     u=np.zeros((4,n,n))
-#    
-    rhs = np.zeros((4,n,n))
-    rhs[0][1:-1,1:-1] = -h4
-    rhs[1][1:-1,1:-1] = -h2
-    rhs[2][1:-1,1:-1] = -h3
-    rhs[3][1:-1,1:-1]= dvector-h1
+    
+    if matrix_type =='Original':
+    
+        rhs = np.zeros((4,n,n))
+        rhs[0][1:-1,1:-1] = -h4
+        rhs[1][1:-1,1:-1] = -h2
+        rhs[2][1:-1,1:-1] = -h3
+        rhs[3][1:-1,1:-1]= dvector-h1
+        
+    else:
+        
+        rhs = np.zeros((4,n,n))
+        rhs[0][1:-1,1:-1] = -np.sqrt(alpha)*h4
+        rhs[1][1:-1,1:-1] = -h2/float(np.sqrt(alpha))
+        rhs[2][1:-1,1:-1] = -h3/float(np.sqrt(alpha))
+        rhs[3][1:-1,1:-1]= dvector-h1
+    
+    
 
-    
-    
-    
-    # Set RHS at intilisation
 
-#    rhs = np.zeros((4,n,n))
-#    rhs[0][1:-1,1:-1] = -np.sqrt(alpha)*h4
-#    rhs[1][1:-1,1:-1] = -h2/float(np.sqrt(alpha))
-#    rhs[2][1:-1,1:-1] = -h3/float(np.sqrt(alpha))
-#    rhs[3][1:-1,1:-1]= dvector-h1
 
-    # Set the number of relax
-    s1=10
-    s2=10
-#    s3=6
-#    s4=6
+def Ultimate_MG(cyclenumber, i, alpha, matrix_type):
+    """ This routine takes the grid set up by the function Setup_Grid and invoke the
+    defined V-cycle to solve the matrix
     
-    
-#    #Initialise a list to record l2 norm of resudual 
-    rnorm=[np.linalg.norm(residue(rhs, u, alpha)[0])*h] #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2]) * h]
-##    
-##    # Initialise a list to record l2 norm of error
-#    ecnorm = [np.linalg.norm(u[0]-cexact(x1, y1))*h]
-#    eg1norm = [np.linalg.norm(u[1]-g1exact(x1, y1))*h]
-##    egg1norm = [np.linalg.norm(u2[1]-g1exact(x1, y1))*h]
-##    e3norm = [np.linalg.norm(u[2]-g2exact(x1, y1))*h]
-#    ewnorm = [np.linalg.norm(u[3]-wexact(x1, y1))*h]
-#    
-    
+    Input: Cyclenumber: the number of V-cycle
+                     i: index of grid size
+                     alpha
+                     matrix_type
+    """
+
+
+
+    global u, rhs, h, cexact, x1, y1
+    Setup_Grid(i, alpha, matrix_type)
+
+
+
+    # Set the number of relaxation
+    s1=20
+    s2=20
+
+    #Initialise a list to record l2 norm of resudual 
+    rnorm=[np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h] #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2]) * h]
+    enorm = [np.linalg.norm((u[0]-cexact(x1, y1))[1:-1,1:-1])*h]
     
     # Start V-cycle
     for cycle in range(1, cyclenumber+1):
-        
-        #print rhs[0], 'rhs'
+
         u = VCycle(u,rhs, s1, s2, alpha)
- #       eg1norm.append(np.linalg.norm((u[1]-g1exact(x1,y1))[2:-2,2:-2])*h)
-#        u2 = VCycle(u2,rhs, s3, s4, alpha, A_list, G1_list, G2_list, L_list)
+        rnorm.append(np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h) #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2])*h)
+        enorm.append(np.linalg.norm((u[0]-cexact(x1,y1))[1:-1,1:-1])*h)
+        
+    #Plot the semi-log for resiudal and erro r
+    convergence_plot(cyclenumber,rnorm)
+
     
-        
-        #print rhs[0], 'RHS'
-        rnorm.append(np.linalg.norm(residue(rhs, u, alpha)[0])*h) #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2])*h)
-#    
-#        ecnorm.append(np.linalg.norm((u[0]-cexact(x1,y1))[2:-2,2:-2])*h) 
-#         eg1norm.append(np.linalg.norm((u[1]-g1exact(x1,y1))[2:-2,2:-2])*h)
-##        egg1norm.append(np.linalg.norm((u2[1]-g1exact(x1,y1))[2:-2,2:-2])*h)
-#        
-#        
-#        ewnorm.append(np.linalg.norm(u[3]-wexact(x1,y1))*h)
-        
-
-
-        
-     #Plot the semi-log for resiudal and erro
-
-    xline = np.arange(cyclenumber+1)
-    plt.figure(figsize=(4,5))
-    plt.semilogy(xline, rnorm, 'bo-', xline, rnorm, 'k',label='sdad')
-    #plt.semilogy(xline, egg1norm, 'bo', xline, egg1norm, 'k',label='sdad')
-    title('Convergence with Residual(Richardson)')
-    xlabel('Number of cycles')
-    ylabel('Error under l2 norm')
-    plt.show()
-    #print u, rnorm
 
     return u
-    
-    
 
-    # Set the RHS 
-    
-    
-    
-def Plot_approximation(cyclenumber):   
-    
-    from mpl_toolkits.mplot3d import Axes3D
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
-    from matplotlib.ticker import LinearLocator, FormatStrFormatter
-    import numpy as np
-
-    
-    
-    fig = plt.figure(figsize=(8,5))
-    ax = fig.gca(projection='3d')
-    
-    # Make data.
-    i = 2
-    
-    n= 2**i+1
-    
-    h=1/float(n-1)
-    
-    x1, y1 = np.meshgrid(np.arange(0, 1+h, h), np.arange(0, 1+h, h))
-    
-    #u = sin(pi*x1)*sin(pi*y1) + 5*sin(31*pi*x1)*sin(31*pi*y1)
-    u = Ultimate_MG(cyclenumber)[0]
-    print(u)
-    
-    #uexact = exp_soln(x1, y1)
-     #Plot the surface.
-#    surf = ax.plot_surface(x1, y1, u, cmap=cm.coolwarm,
-#                           linewidth=0, antialiased=False)
-#    
-#    # Customize the z axis.
-#    #ax.set_zlim(-1.01, 1.01)
-#    ax.zaxis.set_major_locator(LinearLocator(10))
-#    ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-#    
-#    # Add a color bar which maps values to colors.
-#    fig.colorbar(surf, shrink=0.5, aspect=5)
-     
-    ax.plot_surface(x1, y1, u,cmap='viridis',linewidth=0)
-    
-    # Set the z axis limits
-    #ax.set_zlim(node_v.min(),node_v.max())
-    
-    # Make the ticks looks pretty
-    ax.zaxis.set_major_locator(LinearLocator(10))
-    ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-    
-    plt.show()    
-    
-    
-# =============================================================================
-#  Injection   
-# =============================================================================
-
-#    grid = uf
-    
-#       xnodes = int((xdim+1)/2)
-#       ynodes = int((xdim+1)/2)
-#    
-#    for k in range(depth):
-#        
-#        grid[k, 0, 0] += 0.5 * uf[k, 0, 1] +0.5 * uf[k,1, 0]
-#        
-#        grid[k,0,-1] += 0.5 * uf[k, 0, -2] + 0.5 * uf[k,1,-1]
-#        
-#        grid[k,-1,0] += 0.5* uf[k, -1, 1] + 0.5*uf[k,-2,0]
-#        
-#        grid[k,-1,-1] += 0.5* uf[k,-2,-1] + 0.5* uf [k, -1,-2]
-#        
-#        
-#        
-#    for k in range(depth):
-#        
-#        for i in range(2, xdim-2, 2):
-#            
-#            grid[k, i, 0] = uf[k,i, 0] + 0.5 * uf[k, i-1, 0] +0.5 * uf[k, i+1, 0] + 0.5 * uf[k, i, 1]
-#            
-#            grid[k, i, -1] = uf[k, i, -1] + 0.5 * uf[k, i-1, -1] + 0.5 * uf[k, i+1, -1] + 0.5 * uf[k, i, -2]
-#            
-#            grid[k, 0, i] = uf[k, 0, i] + 0.5* uf[k, 0, i-1] +0.5 * uf[k, 0, i+1] + 0.5 * uf[k, 1, i]
-#            
-#            grid[k, -1, i] =uf[k, -1, i] + 0.5 * uf[k, -1, i-1] + 0.5 * uf[k, -1, i+1] + 0.5 * uf[k, -2, i]
-#        
-#    
-#    for k in range(depth): 
-#        
-#        for i in range(2, xdim-2, 2):
-#            
-#            for j in range(2, xdim-2, 2):
-#                
-#                grid[k, i, j] = 0.25* grid[k, i,j] +0.125* grid[k, i-1,j] +0.125 * grid[k, i+1,j] + 0.125 * grid[k, i,j+1] + 0.125 * grid[k,i, j-1]+\
-#            0.0625 * grid[k, i-1, j-1] + 0.0625 * grid[k,i-1, j+1] + 0.0625 * grid[k,i+1, j-1] + 0.0625 * grid[k, i+1, j+1]
-                
-                
-#    for k in range(depth):
-#        for i in range(1,xnodes-1):
-#            for j in range(1,ynodes-1):
-#                
-#                grid[k, i,j] = 0.0625 * ( 4* uf[k, 2*i, 2*j]+ 2* uf[k, 2*1 +1, 2*j] + 2* uf[k, 2*i-1, 2*j] + \
-#                    2 * uf[k, 2*i, 2*j-1] + 2 *uf[k, 2*i, 2*j+1]+  uf[k, 2*i-1, 2*j-1] + uf[k, 2*i-1, 2*j+1]+
-#                    uf[k, 2*j +1, 2*j-1] + uf[k, 2*i+1, 2*j +1])  
-        
-        
-        
-        
-                
     

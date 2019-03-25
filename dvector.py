@@ -7,6 +7,8 @@ Created on Sun Nov 18 10:19:25 2018
 """
 import numpy as np
 from functions import Linear
+np.set_printoptions(precision=4)
+
 
 #i = 2
 #
@@ -76,21 +78,29 @@ def In_triangle(node1, node2, node3, data_coord):
 
 def  dvector(Coord, data, nodes,n):
     
+    """ This rountine assembles dvector from uniformly distributed data
+    on uniform grid
+    """
+    
+    
+    
     from scipy import zeros
     
+    # initilise the dvector.
     dvector = zeros([(n-2)**2,1])
     
     
+    # Ininilise counting .
     IDi = -1
     for i in range(len(list(nodes))):
         
         
-        
-        if nodes[i][0] != 1 and nodes[i][0] != 0 and nodes[i][1] != 0 and nodes[i][1] != 1:
+        # Find the initerior nodes.
+        if nodes[i][0] != 0 and nodes[i][0] != 1 and nodes[i][1] != 0 and nodes[i][1] != 1:
             
             IDi += 1
             
-            print IDi
+            #print IDi
     
             
         
@@ -109,34 +119,49 @@ def  dvector(Coord, data, nodes,n):
             node7 = nodes[i-n-1]
             
             
+            # For each data, locate the triangle
             
             for j in range(len(Coord)):
                 
+                
+                
                 if In_triangle(node1, node2, node3, Coord[j]):
                     
+    
                     
                     dvector[IDi,0] += Polynomial_eval(node1, node2, node3, Coord[j])* data[j]
                 
                 if In_triangle(node1, node3, node4, Coord[j]):
                     
+                    
+                    
                     dvector[IDi,0] += Polynomial_eval(node1, node3, node4, Coord[j])* data[j]
                     
                 if In_triangle(node1, node4, node5, Coord[j]):
+                    
+                    
                     
                     dvector[IDi,0] += Polynomial_eval(node1, node4, node5, Coord[j])* data[j]
                     
                 if In_triangle(node1, node5, node6, Coord[j]):
                     
+                    
+                    
                     dvector[IDi,0] += Polynomial_eval(node1, node5, node6, Coord[j])* data[j]
                     
                 if In_triangle(node6, node1, node7, Coord[j]):
+                    
+                    
                     
                     dvector[IDi,0] += Polynomial_eval(node1, node6, node7, Coord[j])* data[j]
                     
                 if In_triangle(node1, node7, node2, Coord[j]):
                     
+                    
+                    
                     dvector[IDi,0] += Polynomial_eval(node1, node7, node2, Coord[j])* data[j]
                 
+            
                 
     return dvector
 
