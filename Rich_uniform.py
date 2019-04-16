@@ -15,25 +15,6 @@ from scipy import eye, zeros, linalg
 from numpy import linalg as LA
 from copy import copy
 
-from functions import sin_soln
-
-
-i=5
-
-n= 2**i+1
-
-h=1/float(n-1)
-    
-# Set the mesh grid with data structure of nnumpy array 
-x1, y1 = np.meshgrid(np.arange(0, 1+h, h), np.arange(0, 1+h, h))
-
-testu=np.zeros((4,n,n))
-testu[0]=sin_soln(x1,y1)
-testu[1]=sin_soln(x1,y1)
-testu[2]=sin_soln(x1,y1)
-testu[3]=sin_soln(x1,y1)
-
-
 
 def Lstencil(u):
     
@@ -45,7 +26,6 @@ def Lstencil(u):
         
         for j in range(1, u.shape[0]-1):
             
-            #print u[i,j] ,u [i-1,j] ,u[i+1,j], u[i,j+1]
             newu[i,j] = (4* u[i,j] -  u[i-1,j] - u[i+1,j] - u[i,j-1] - u[i, j+1])
             
     return newu
@@ -105,8 +85,7 @@ def G2stencil(u,h):
             
             # Linda's version
             newu[i,j] = (u[i,j-1] - u[i,j+1] -2 *u[i+1,j] +2*u[i-1,j] -u[i+1, j+1] +u[i-1,j-1])*h/float(6)
-            
-            
+               
             
     return newu
             
@@ -144,8 +123,6 @@ def MultS2(u,alpha,h):
     
     Input: u: a 4-layer vector 
     """
-    
-    
 
     newu  = np.zeros((4, u.shape[1], u.shape[2])) 
     
@@ -159,11 +136,6 @@ def MultS2(u,alpha,h):
     newu[3] = np.sqrt(alpha)*Lstencil(np.sqrt(alpha)*u[3]) + Astencil(u[0],h)
     
     return newu
-
-
-    
-    
-
 
 
 def Rich(u, rhs,alpha):
@@ -182,7 +154,7 @@ def Rich(u, rhs,alpha):
    
     newu  = np.zeros((4, u.shape[1], u.shape[2]))  
     
-    
+    # weighting values depend on alpha
     w = 0.15
     
    
