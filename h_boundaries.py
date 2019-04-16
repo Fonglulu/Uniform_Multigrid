@@ -5,39 +5,17 @@ Created on Sun Nov 11 11:04:56 2018
 
 @author: shilu
 """
+#########################################################
+# This module computes the values on boundaries, which
+# will be later moved to right hand side to have 
+# zero Dirichlet boundary condition
+#########################################################
 
 import numpy as np
 
 from functions import Linear, Xlinear, Ylinear, Zero
 from scipy import zeros, linalg
-#
-#i = 2
-#
-#n= 2**i+1
-#
-## Find the spacing
-#h=1/float(n-1)
-#
-## Set the mesh grid, that is interior
-##x1, y1 = np.meshgrid(np.arange(h, 1, h), np.arange(h, 1, h))
-#x1, y1 = np.meshgrid(np.arange(0, 1+h, h), np.arange(0, 1+h, h))
-#
-#
-#intx, inty = np.meshgrid(np.arange(h, 1, h), np.arange(h, 1, h))
-#nodes = np.vstack([x1.ravel(), y1.ravel()]).T
-#intnodes = np.vstack([intx.ravel(), inty.ravel()]).T
-#
-#
-#
-## Given the boundary information
-#c = Linear(x1, y1)
-#c = c.flatten()
-#g1 = Xlinear(x1, y1)
-#g1 = g1.flatten()
-#g2 = Ylinear(x1, y1)
-#g2 = g2.flatten()
-#w = Zero(x1,y1)
-#w = w.flatten()
+
 
 
 
@@ -222,12 +200,7 @@ def hboundaries(alpha, h, n, nodes, intnodes, c, g1, g2, w):
                     
         return hboundaries
     
-#    
-#hboundaries = hboundaries(1, h, n, nodes, intnodes, c, g1, g2, w)
-##        
-#print hboundaries[2]
-                    
-            
+
 
             
 
