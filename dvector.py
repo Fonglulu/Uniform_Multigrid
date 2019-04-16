@@ -10,35 +10,9 @@ from functions import Linear
 np.set_printoptions(precision=4)
 
 
-#i = 2
-#
-#n= 2**i+1
-#
-## Find the spacing
-#h=1/float(n-1)
-#
-## Set the mesh grid, that is interior
-##x1, y1 = np.meshgrid(np.arange(h, 1, h), np.arange(h, 1, h))
-#x1, y1 = np.meshgrid(np.arange(0, 1+h, h), np.arange(0, 1+h, h))
-#
-#nodes = np.vstack([x1.ravel(), y1.ravel()]).T
-#
-#
-#
-## Set up data
-#x = np.linspace(0, 1.0,20)
-#y = np.linspace(0, 1.0,20)
-#X, Y = np.meshgrid(x,y)
-#
-#data = Linear(X,Y)
-#data = data.flatten()
-#
-#coordx = X.flatten()
-#coordy = Y.flatten()
-#Coord = zip(coordx, coordy)
-
 
 def Polynomial_eval(node1, node2, node3, data_coord):
+
     
     from math import fabs
     #print data_coord
@@ -50,7 +24,7 @@ def Polynomial_eval(node1, node2, node3, data_coord):
     y3 = node3[1]
     
     division = (y1-y2)*(x2-x3)-(y2-y3)*(x1-x2);
-    #print division
+    
     
     
     assert fabs(division) > 1.0E-12, "divide by zero"
@@ -83,7 +57,6 @@ def  dvector(Coord, data, nodes,n):
     """
     
     
-    
     from scipy import zeros
     
     # initilise the dvector.
@@ -99,10 +72,6 @@ def  dvector(Coord, data, nodes,n):
         if nodes[i][0] != 0 and nodes[i][0] != 1 and nodes[i][1] != 0 and nodes[i][1] != 1:
             
             IDi += 1
-            
-            #print IDi
-    
-            
         
             node1 = nodes[i]
             
@@ -122,18 +91,12 @@ def  dvector(Coord, data, nodes,n):
             # For each data, locate the triangle
             
             for j in range(len(Coord)):
-                
-                
-                
+               
                 if In_triangle(node1, node2, node3, Coord[j]):
-                    
-    
-                    
+                 
                     dvector[IDi,0] += Polynomial_eval(node1, node2, node3, Coord[j])* data[j]
                 
                 if In_triangle(node1, node3, node4, Coord[j]):
-                    
-                    
                     
                     dvector[IDi,0] += Polynomial_eval(node1, node3, node4, Coord[j])* data[j]
                     
@@ -164,6 +127,4 @@ def  dvector(Coord, data, nodes,n):
             
                 
     return dvector
-
-#dvector =dvector(Coord, data, nodes, n)/float(len(Coord))
                 
