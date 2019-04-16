@@ -54,7 +54,7 @@ def residue_alpha(rhs,u, alpha):
     h = 1/ float(xdim+2-1)
     
     r=np.zeros((4, rhs.shape[1],rhs.shape[2]))
-#    
+    
     r[0] = rhs[0] - Lstencil(u[0])+ G1stencil(u[1], h) + G2stencil(u[2] ,h)
     
     r[1] = rhs[1] - alpha *  Lstencil(u[1]) - G1stencil(u[3],h)
