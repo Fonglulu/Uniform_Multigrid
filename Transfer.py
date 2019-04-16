@@ -10,9 +10,6 @@ Created on Sun Mar 24 11:49:58 2019
 # Import appropriate information from other classes
 import numpy as np
 
-
-
-
 def Res_Injection(uf):
     
     """
@@ -65,9 +62,7 @@ def FW_Restriction(uf):
     return uc
                 
               
-                
-
-
+               
 
 def Interpolation(uc):
     
