@@ -26,8 +26,6 @@ from operator import itemgetter
 
 from copy import copy
 
-#np.set_printoptions(precision=2)
-
 
 
 def VCycle(u,rhs,  s1, s2, alpha):
@@ -129,7 +127,7 @@ def Setup_Grid(i, alpha, matrix_type):
     wexact = Zero
     w = wexact(x1,y1).flatten()
     
-    print 'START'
+    # Counting the time to build dvector
     start = time.time()
     
     # Import the dvector
@@ -140,8 +138,7 @@ def Setup_Grid(i, alpha, matrix_type):
     done = time.time()
     
     elapsed = done - start
-    print(elapsed)
-    print 'FINISH'
+   
     
     
     # import the boundary condition to form rhs vector
@@ -205,14 +202,16 @@ def Ultimate_MG(cyclenumber, i, alpha, matrix_type):
     s2=20
 
     #Initialise a list to record l2 norm of resudual 
-    rnorm=[np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h] #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2]) * h]
+    rnorm=[np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h] 
     enorm = [np.linalg.norm((u[0]-cexact(x1, y1))[1:-1,1:-1])*h]
     
     # Start V-cycle
     for cycle in range(1, cyclenumber+1):
 
         u = VCycle(u,rhs, s1, s2, alpha)
-        rnorm.append(np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h) #A_list[0], G1_list[0], G2_list[0])[0,2:-2,2:-2])*h)
+        # Compute the residual after each cycle
+        rnorm.append(np.linalg.norm(residue_sqrt_alpha(rhs, u, alpha)[0])*h) 
+        # Compute the error on c after each cycle
         enorm.append(np.linalg.norm((u[0]-cexact(x1,y1))[1:-1,1:-1])*h)
         
     #Plot the semi-log for resiudal and erro r
